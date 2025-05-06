@@ -1,0 +1,59 @@
+name: wsl-2-action
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: windows-2025
+    env:
+      DOCKER_HOST: tcp://127.0.0.1:2375
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: wsl - chceck version
+        run: wsl --version
+
+      - name: wsl - install distro
+        run: wsl --install Ubuntu
+
+      - name: wsl - prevent shutdown
+        run:  wsl -d Ubuntu --exec dbus-launch true   
+
+      - name: wsl - update wsl repositories
+        run: | 
+          wsl sudo apt-get update
+
+      - name: wsl - register docker repositories
+        run: |
+          wsl sudo apt-get install ca-certificates curl
+          wsl -- sudo install -m 0755 -d /etc/apt/keyrings
+          wsl -- sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          wsl -- sudo chmod a+r /etc/apt/keyrings/docker.asc
+          wsl -- bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo ${UBUNTU_CODENAME:-$VERSION_CODENAME}) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null'
+          wsl sudo apt-get update
+   
+      - name: wsl - install docker
+        run: |
+          wsl sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+
+      - name: wsl - check Docker Daemon
+        run: wsl docker info
+
+      - name: wsl - expose docker daemon to tcp
+        run: |
+          wsl bash -c "sudo sed -i 's|fd://|tcp://127.0.0.1:2375|' /usr/lib/systemd/system/docker.service"
+          wsl sudo systemctl daemon-reload
+          wsl sudo service docker restart
+
+      - name: windows - install docker client
+        run: |
+          choco install docker-cli
+
+      - name: windows - check Docker Daemon
+        run: docker info
+      
+      - name: windows - run linux hello world container
+        run: docker run hello-world:linux
