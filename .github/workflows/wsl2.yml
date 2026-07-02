@@ -1,6 +1,7 @@
 name: wsl-2-action
 
 on:
+  workflow_dispatch:
   push:
 
 jobs:
