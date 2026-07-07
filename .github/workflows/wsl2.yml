@@ -10,7 +10,7 @@ jobs:
     timeout-minutes: 30
     env:
       DOCKER_HOST: tcp://127.0.0.1:2375
-      WSL_DISTRO: Ubuntu
+      WSL_DISTRO: Ubuntu-26.04
       
     steps:
       - uses: actions/checkout@v4
