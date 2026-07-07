@@ -20,7 +20,6 @@ jobs:
         run: |
           wsl --version
           wsl --status
-          wsl --list --verbose
 
       - name: Ensure WSL platform is enabled
         shell: pwsh
