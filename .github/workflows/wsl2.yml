@@ -10,6 +10,8 @@ jobs:
     timeout-minutes: 30
     env:
       DOCKER_HOST: tcp://127.0.0.1:2375
+      WSL_DISTRO: Ubuntu
+      
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,6 +22,7 @@ jobs:
         run: |
           wsl --version
           wsl --status
+          wsl --list --online
 
       - name: Ensure WSL platform is enabled
         shell: pwsh
@@ -30,42 +33,42 @@ jobs:
       - name: Install Ubuntu distro explicitly
         shell: pwsh
         run: |
-          wsl --install -d Ubuntu-24.04
+          wsl --install -d $env:WSL_DISTRO
 
       - name: Verify distro
         shell: pwsh
         run: |
-          wsl -l -v
-          wsl -d Ubuntu-24.04 -- uname -a
+          wsl -d $env:WSL_DISTRO -l -v
+          wsl -d $env:WSL_DISTRO -- uname -a
 
       - name: wsl - prevent shutdown
-        run:  wsl -d Ubuntu --exec dbus-launch true   
+        run:  wsl -d $env:WSL_DISTRO --exec dbus-launch true   
 
       - name: wsl - update wsl repositories
         run: | 
-          wsl sudo apt-get update
+          wsl -d $env:WSL_DISTRO sudo apt-get update
 
       - name: wsl - register docker repositories
         run: |
-          wsl sudo apt-get install ca-certificates curl
-          wsl -- sudo install -m 0755 -d /etc/apt/keyrings
-          wsl -- sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-          wsl -- sudo chmod a+r /etc/apt/keyrings/docker.asc
-          wsl -- bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo ${UBUNTU_CODENAME:-$VERSION_CODENAME}) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null'
-          wsl sudo apt-get update
+          wsl -d $env:WSL_DISTRO sudo apt-get install ca-certificates curl
+          wsl -d $env:WSL_DISTRO -- sudo install -m 0755 -d /etc/apt/keyrings
+          wsl -d $env:WSL_DISTRO -- sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          wsl -d $env:WSL_DISTRO -- sudo chmod a+r /etc/apt/keyrings/docker.asc
+          wsl -d $env:WSL_DISTRO -- bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo ${UBUNTU_CODENAME:-$VERSION_CODENAME}) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null'
+          wsl -d $env:WSL_DISTRO sudo apt-get update
    
       - name: wsl - install docker
         run: |
-          wsl sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+          wsl -d $env:WSL_DISTRO sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
 
       - name: wsl - check Docker Daemon
-        run: wsl docker info
+        run: wsl -d $env:WSL_DISTRO docker info
 
       - name: wsl - expose docker daemon to tcp
         run: |
-          wsl bash -c "sudo sed -i 's|fd://|tcp://127.0.0.1:2375|' /usr/lib/systemd/system/docker.service"
-          wsl sudo systemctl daemon-reload
-          wsl sudo service docker restart
+          wsl -d $env:WSL_DISTRO bash -c "sudo sed -i 's|fd://|tcp://127.0.0.1:2375|' /usr/lib/systemd/system/docker.service"
+          wsl -d $env:WSL_DISTRO sudo systemctl daemon-reload
+          wsl -d $env:WSL_DISTRO sudo service docker restart
 
       - name: windows - install docker client
         run: |
