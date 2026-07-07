@@ -7,6 +7,7 @@ on:
 jobs:
   build:
     runs-on: windows-2025
+    timeout-minutes: 30
     env:
       DOCKER_HOST: tcp://127.0.0.1:2375
     steps:
@@ -14,11 +15,29 @@ jobs:
         with:
           lfs: true
 
-      - name: wsl - chceck version
-        run: wsl --version
+      - name: Check WSL status
+        shell: pwsh
+        run: |
+          wsl --version
+          wsl --status
+          wsl --list --verbose
 
-      - name: wsl - install distro
-        run: wsl --install Ubuntu
+      - name: Ensure WSL platform is enabled
+        shell: pwsh
+        run: |
+          wsl --install --no-distribution
+          wsl --set-default-version 2
+
+      - name: Install Ubuntu distro explicitly
+        shell: pwsh
+        run: |
+          wsl --install -d Ubuntu-24.04
+
+      - name: Verify distro
+        shell: pwsh
+        run: |
+          wsl -l -v
+          wsl -d Ubuntu-24.04 -- uname -a
 
       - name: wsl - prevent shutdown
         run:  wsl -d Ubuntu --exec dbus-launch true   
