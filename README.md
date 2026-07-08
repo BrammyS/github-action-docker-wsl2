@@ -75,9 +75,9 @@ jobs:
         run: docker run hello-world:linux
 ```
 
-## Why Alpine instead of Ubuntu?
+## Why Alpine?
 
-Ubuntu WSL does not work reliably on GitHub-hosted Windows runners. Alpine is lightweight, starts instantly, and works without issues in WSL2 on Actions runners.
+Alpine is lightweight, starts instantly, and works reliably in WSL2 on GitHub Actions runners.
 
 ## Key details
 
