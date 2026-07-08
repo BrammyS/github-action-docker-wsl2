@@ -31,39 +31,30 @@ jobs:
           wsl --install --no-distribution
           wsl --set-default-version 2
 
-      - name: Get latest Alpine Docker image run ID
-        id: get-run-id
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $runId = gh run list `
-            --repo BrammyS/github-action-docker-wsl2 `
-            --workflow build-wsl-docker-image.yml `
-            --status success `
-            --limit 1 `
-            --json databaseId `
-            --jq '.[0].databaseId'
-          Write-Output "run-id=$runId" >> $env:GITHUB_OUTPUT
-
-      - name: Download Alpine Docker WSL artifact
-        uses: actions/download-artifact@v4
+      - name: Get Alpine Docker WSL export
+        uses: actions/checkout@v4
         with:
-          name: alpine-docker-wsl
-          path: ${{ github.workspace }}\wsl-artifact
-          run-id: ${{ steps.get-run-id.outputs.run-id }}
-          github-token: ${{ github.token }}
           repository: BrammyS/github-action-docker-wsl2
+          lfs: true
+          sparse-checkout: wsl
+          path: docker-wsl
 
       - name: Import Alpine and start Docker
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "$PWD\AlpineRoot" | Out-Null
-          wsl --import Alpine "$PWD\AlpineRoot" "${{ github.workspace }}\wsl-artifact\alpine-docker-wsl.tar"
+          wsl --import Alpine "$PWD\AlpineRoot" "${{ github.workspace }}\docker-wsl\wsl\alpine-docker-wsl.tar"
           # Keep WSL alive between steps
           wsl -d Alpine -- sh -c 'nohup sleep infinity > /dev/null 2>&1 &'
-          # Start Docker daemon
-          wsl -d Alpine -- sh -c 'nohup dockerd > /var/log/dockerd.log 2>&1 & sleep 10 && docker info'
+          # Start Docker daemon and wait for it to be ready
+          wsl -d Alpine -- sh -c 'nohup dockerd > /var/log/dockerd.log 2>&1 &'
+          $timeout = 60; $elapsed = 0
+          while ($elapsed -lt $timeout) {
+            $null = wsl -d Alpine -- docker info 2>&1
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds 2; $elapsed += 2
+          }
+          if ($elapsed -ge $timeout) { Write-Error "Docker daemon failed to start"; exit 1 }
 
       - name: Install Docker CLI on Windows
         shell: pwsh
@@ -84,25 +75,26 @@ Alpine is lightweight, starts instantly, and works reliably in WSL2 on GitHub Ac
 | Setting | Value |
 |---------|-------|
 | Runner | `windows-2025` |
-| WSL distro | Alpine Linux 3.24 |
+| WSL distro | Alpine Linux |
 | Docker access | `tcp://127.0.0.1:2375` |
-| Build schedule | Weekly (Sunday midnight UTC) |
-| Artifact retention | 90 days |
+| Storage | Git LFS (`wsl/alpine-docker-wsl.tar`) |
 
 ## Repository structure
 
 ```
 .github/workflows/
-  build-wsl-docker-image.yml   # Weekly: builds Alpine + Docker WSL export
+  build-wsl-docker-image.yml   # Manual: builds Alpine + Docker WSL export
   wsl2.yml                     # Validation: tests the full flow
+wsl/
+  alpine-docker-wsl.tar        # Pre-built WSL export (Git LFS)
 ```
 
 ## Requirements
 
 - A `windows-2025` (or compatible) GitHub-hosted runner
-- The weekly build must have run at least once before using the artifact
+- The build workflow must have been run at least once to generate `wsl/alpine-docker-wsl.tar`
 
-To trigger the first build manually, go to **Actions → build-wsl-docker-image → Run workflow**.
+To trigger the build, go to **Actions → build-wsl-docker-image → Run workflow** and supply the Alpine version (e.g. `3.24.1`).
 
 ## Contributing
 

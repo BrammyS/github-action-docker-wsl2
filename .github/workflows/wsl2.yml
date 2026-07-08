@@ -15,6 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Enable WSL
         shell: pwsh
@@ -22,37 +24,11 @@ jobs:
           wsl --install --no-distribution
           wsl --set-default-version 2
 
-      - name: Get latest build run ID
-        id: get-run-id
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $runId = gh run list `
-            --workflow build-wsl-docker-image.yml `
-            --status success `
-            --limit 1 `
-            --json databaseId `
-            --jq '.[0].databaseId'
-          if (-not $runId) {
-            Write-Error "No successful build-wsl-docker-image workflow run found. Run the build workflow first."
-            exit 1
-          }
-          Write-Output "run-id=$runId" >> $env:GITHUB_OUTPUT
-
-      - name: Download Alpine Docker WSL artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: alpine-docker-wsl
-          path: ${{ github.workspace }}\wsl-artifact
-          run-id: ${{ steps.get-run-id.outputs.run-id }}
-          github-token: ${{ github.token }}
-
       - name: Import Alpine into WSL
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "$PWD\AlpineRoot" | Out-Null
-          wsl --import $env:WSL_DISTRO "$PWD\AlpineRoot" "${{ github.workspace }}\wsl-artifact\alpine-docker-wsl.tar"
+          wsl --import $env:WSL_DISTRO "$PWD\AlpineRoot" "${{ github.workspace }}\wsl\alpine-docker-wsl.tar"
           wsl -d $env:WSL_DISTRO -- cat /etc/os-release
 
       - name: Start Docker daemon and keep WSL alive

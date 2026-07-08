@@ -68,11 +68,16 @@ jobs:
       - name: Export WSL distro
         shell: pwsh
         run: |
-          wsl --export Alpine "$PWD\alpine-docker-wsl.tar"
+          New-Item -ItemType Directory -Force -Path "$PWD\wsl" | Out-Null
+          wsl --export Alpine "$PWD\wsl\alpine-docker-wsl.tar"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: alpine-docker-wsl
-          path: alpine-docker-wsl.tar
-          retention-days: 0
+      - name: Commit to repository
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add wsl/alpine-docker-wsl.tar
+          git commit -m "Update Alpine Docker WSL export (Alpine ${{ inputs.alpine_version }})"
+          git push
