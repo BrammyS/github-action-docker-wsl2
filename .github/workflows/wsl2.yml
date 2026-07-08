@@ -33,8 +33,12 @@ jobs:
       - name: Download Alpine
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.1-x86_64.tar.gz ./alpine-minirootfs.tar.gz
-          wsl --import Alpine ./alpine-minirootfs.tar.gz
+          Invoke-WebRequest `
+            -Uri "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.1-x86_64.tar.gz" `
+            -OutFile "$PWD/alpine-minirootfs.tar.gz"
+
+          New-Item -ItemType Directory -Force -Path "$PWD\AlpineRoot" | Out-Null
+          wsl --import Alpine "$PWD\AlpineRoot" "$PWD\alpine-minirootfs.tar.gz"
 
       - name: Install Ubuntu distro explicitly
         shell: pwsh
