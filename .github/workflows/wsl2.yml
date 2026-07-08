@@ -55,9 +55,12 @@ jobs:
           wsl --import $env:WSL_DISTRO "$PWD\AlpineRoot" "${{ github.workspace }}\wsl-artifact\alpine-docker-wsl.tar"
           wsl -d $env:WSL_DISTRO -- cat /etc/os-release
 
-      - name: Start Docker daemon
+      - name: Start Docker daemon and keep WSL alive
         shell: pwsh
         run: |
+          # Start a keep-alive process so the WSL VM doesn't shut down between steps
+          wsl -d $env:WSL_DISTRO -- sh -c 'nohup sleep infinity > /dev/null 2>&1 &'
+          # Start Docker daemon
           wsl -d $env:WSL_DISTRO -- sh -c 'nohup dockerd > /var/log/dockerd.log 2>&1 & sleep 10 && docker info'
 
       - name: Install Docker CLI on Windows
