@@ -1,60 +1,109 @@
 # Run Linux Docker Containers on a Windows GitHub Hosted Runner
 
-An example repository that shows how to use **WSL2 on a Windows GitHub Actions runner** to run **Linux Docker containers**.
+Run **Linux Docker containers** from a **Windows GitHub Actions runner** using WSL2 and Alpine Linux.
 
-This is useful when you need a Windows-based workflow but still want to build, test, or run Linux containers as part of the same job.
+This project provides a pre-built Alpine WSL2 image with Docker installed, so your Windows pipeline can use Linux containers without slow installs or Ubuntu compatibility issues.
 
-## What this repo demonstrates
+## How it works
 
-- Running on a **Windows GitHub-hosted runner**
-- Using **WSL2** as the Linux environment
-- Starting and using **Docker inside WSL2**
-- Running **Linux containers** from a GitHub Actions workflow
+1. **Weekly build** ([`build-wsl-docker-image.yml`](./.github/workflows/build-wsl-docker-image.yml)) creates a ready-to-use Alpine WSL2 export with Docker pre-installed and uploads it as an artifact.
+2. **Your pipeline** downloads the artifact, imports it into WSL2, starts Docker, and exposes the daemon to Windows on `tcp://127.0.0.1:2375`.
 
-## Example workflow
+Windows gets full access to the Linux Docker daemon — you can use `docker build`, `docker run`, `docker compose`, etc. directly from PowerShell.
 
-The main example workflow is:
+## Usage in your own pipeline
 
-- [`.github/workflows/wsl2.yml`](./.github/workflows/wsl2.yml)
+Add the following steps to your Windows workflow:
 
-It shows the steps needed to prepare WSL2 and execute Docker commands against a Linux environment from a Windows runner.
+```yaml
+jobs:
+  build:
+    runs-on: windows-2025
+    env:
+      DOCKER_HOST: tcp://127.0.0.1:2375
 
-## Why this approach
+    steps:
+      - uses: actions/checkout@v4
 
-GitHub-hosted Windows runners are great when your workflow needs Windows-specific tooling, but Docker container workloads are often Linux-based. Using WSL2 can bridge that gap and let you:
+      - name: Enable WSL
+        shell: pwsh
+        run: |
+          wsl --install --no-distribution
+          wsl --set-default-version 2
 
-- Keep a Windows runner where required
-- Run Linux-first tooling and container workflows
-- Reuse existing Docker-based scripts with minimal changes
+      - name: Get latest Alpine Docker image run ID
+        id: get-run-id
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $runId = gh run list `
+            --repo BrammyS/github-action-docker-wsl2 `
+            --workflow build-wsl-docker-image.yml `
+            --status success `
+            --limit 1 `
+            --json databaseId `
+            --jq '.[0].databaseId'
+          Write-Output "run-id=$runId" >> $env:GITHUB_OUTPUT
 
-## Typical use cases
+      - name: Download Alpine Docker WSL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: alpine-docker-wsl
+          path: ${{ github.workspace }}\wsl-artifact
+          run-id: ${{ steps.get-run-id.outputs.run-id }}
+          github-token: ${{ github.token }}
+          repository: BrammyS/github-action-docker-wsl2
 
-- Building Linux container images from a Windows-oriented pipeline
-- Testing software inside Linux containers while keeping Windows-specific setup steps
-- Hybrid CI scenarios where both Windows and Linux environments are needed in one workflow
+      - name: Import Alpine and start Docker
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$PWD\AlpineRoot" | Out-Null
+          wsl --import Alpine "$PWD\AlpineRoot" "${{ github.workspace }}\wsl-artifact\alpine-docker-wsl.tar"
+          # Keep WSL alive between steps
+          wsl -d Alpine -- sh -c 'nohup sleep infinity > /dev/null 2>&1 &'
+          # Start Docker daemon
+          wsl -d Alpine -- sh -c 'nohup dockerd > /var/log/dockerd.log 2>&1 & sleep 10 && docker info'
+
+      - name: Install Docker CLI on Windows
+        shell: pwsh
+        run: choco install docker-cli -y
+
+      # Docker is now available from Windows!
+      - name: Use Docker
+        shell: pwsh
+        run: docker run hello-world:linux
+```
+
+## Why Alpine instead of Ubuntu?
+
+Ubuntu WSL does not work reliably on GitHub-hosted Windows runners. Alpine is lightweight, starts instantly, and works without issues in WSL2 on Actions runners.
+
+## Key details
+
+| Setting | Value |
+|---------|-------|
+| Runner | `windows-2025` |
+| WSL distro | Alpine Linux 3.24 |
+| Docker access | `tcp://127.0.0.1:2375` |
+| Build schedule | Weekly (Sunday midnight UTC) |
+| Artifact retention | 90 days |
 
 ## Repository structure
 
-```text
-.github/
-  workflows/
-    wsl2.yml
-README.md
+```
+.github/workflows/
+  build-wsl-docker-image.yml   # Weekly: builds Alpine + Docker WSL export
+  wsl2.yml                     # Validation: tests the full flow
 ```
 
-## Getting started
+## Requirements
 
-1. Open the example workflow.
-2. Review the WSL2 setup steps.
-3. Copy the relevant parts into your own workflow.
-4. Adjust the Docker commands for your image or test process.
+- A `windows-2025` (or compatible) GitHub-hosted runner
+- The weekly build must have run at least once before using the artifact
 
-## Notes
-
-- This repository is intended as a **working example**.
-- Behavior on GitHub-hosted runners can evolve over time, so test the workflow in your own environment.
-- The same general technique may also be useful on compatible self-hosted or Azure-based Windows runners.
+To trigger the first build manually, go to **Actions → build-wsl-docker-image → Run workflow**.
 
 ## Contributing
 
-If you find a cleaner setup or additional compatibility notes, feel free to open an issue or pull request.
+Issues and pull requests welcome. If you find improvements to the Alpine setup or Docker configuration, please contribute.
