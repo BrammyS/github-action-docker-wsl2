@@ -1,0 +1,63 @@
+name: build-wsl-docker-image
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Every Sunday at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable WSL
+        shell: pwsh
+        run: |
+          wsl --install --no-distribution
+          wsl --set-default-version 2
+
+      - name: Download Alpine minirootfs
+        shell: pwsh
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.1-x86_64.tar.gz" `
+            -OutFile "$PWD\alpine-minirootfs.tar.gz"
+
+      - name: Import Alpine into WSL
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$PWD\AlpineRoot" | Out-Null
+          wsl --import Alpine "$PWD\AlpineRoot" "$PWD\alpine-minirootfs.tar.gz"
+          wsl -d Alpine -- cat /etc/os-release
+
+      - name: Install Docker in Alpine
+        shell: pwsh
+        run: |
+          wsl -d Alpine -- apk update
+          wsl -d Alpine -- apk add docker docker-cli-compose openrc
+
+      - name: Configure Docker for TCP access
+        shell: pwsh
+        run: |
+          wsl -d Alpine -- sh -c 'mkdir -p /etc/docker && echo "{\"hosts\": [\"tcp://127.0.0.1:2375\", \"unix:///var/run/docker.sock\"]}" > /etc/docker/daemon.json'
+
+      - name: Verify Docker installed
+        shell: pwsh
+        run: |
+          wsl -d Alpine -- docker --version
+          wsl -d Alpine -- dockerd --version
+
+      - name: Export WSL distro
+        shell: pwsh
+        run: |
+          wsl --export Alpine "$PWD\alpine-docker-wsl.tar"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpine-docker-wsl
+          path: alpine-docker-wsl.tar
+          retention-days: 90

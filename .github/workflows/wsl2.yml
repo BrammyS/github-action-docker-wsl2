@@ -1,8 +1,9 @@
 name: wsl-2-action
 
 on:
+  schedule:
+    - cron: '0 12 * * 0' # Every Sunday at noon UTC
   workflow_dispatch:
-  push:
 
 jobs:
   build:
@@ -10,82 +11,68 @@ jobs:
     timeout-minutes: 30
     env:
       DOCKER_HOST: tcp://127.0.0.1:2375
-      WSL_DISTRO: Ubuntu-26.04
-      
+      WSL_DISTRO: Alpine
+
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      - name: Check WSL status
-        shell: pwsh
-        run: |
-          wsl --version
-          wsl --status
-          wsl --list --online
-
-      - name: Ensure WSL platform is enabled
+      - name: Enable WSL
         shell: pwsh
         run: |
           wsl --install --no-distribution
           wsl --set-default-version 2
 
-      - name: Download Alpine
+      - name: Get latest build run ID
+        id: get-run-id
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $runId = gh run list `
+            --workflow build-wsl-docker-image.yml `
+            --status success `
+            --limit 1 `
+            --json databaseId `
+            --jq '.[0].databaseId'
+          if (-not $runId) {
+            Write-Error "No successful build-wsl-docker-image workflow run found. Run the build workflow first."
+            exit 1
+          }
+          Write-Output "run-id=$runId" >> $env:GITHUB_OUTPUT
+
+      - name: Download Alpine Docker WSL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: alpine-docker-wsl
+          path: ${{ github.workspace }}\wsl-artifact
+          run-id: ${{ steps.get-run-id.outputs.run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Import Alpine into WSL
         shell: pwsh
         run: |
-          Invoke-WebRequest `
-            -Uri "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.1-x86_64.tar.gz" `
-            -OutFile "$PWD/alpine-minirootfs.tar.gz"
-
           New-Item -ItemType Directory -Force -Path "$PWD\AlpineRoot" | Out-Null
-          wsl --import Alpine "$PWD\AlpineRoot" "$PWD\alpine-minirootfs.tar.gz"
+          wsl --import $env:WSL_DISTRO "$PWD\AlpineRoot" "${{ github.workspace }}\wsl-artifact\alpine-docker-wsl.tar"
+          wsl -d $env:WSL_DISTRO -- cat /etc/os-release
 
-      - name: Install Ubuntu distro explicitly
+      - name: Start Docker daemon
         shell: pwsh
         run: |
-          wsl --install -d $env:WSL_DISTRO
+          wsl -d $env:WSL_DISTRO -- sh -c 'dockerd &'
+          Start-Sleep -Seconds 5
+          wsl -d $env:WSL_DISTRO -- docker info
 
-      - name: Verify distro
+      - name: Install Docker CLI on Windows
         shell: pwsh
         run: |
-          wsl -d $env:WSL_DISTRO -l -v
-          wsl -d $env:WSL_DISTRO -- uname -a
+          choco install docker-cli -y
 
-      - name: wsl - prevent shutdown
-        run:  wsl -d $env:WSL_DISTRO --exec dbus-launch true   
-
-      - name: wsl - update wsl repositories
-        run: | 
-          wsl -d $env:WSL_DISTRO sudo apt-get update
-
-      - name: wsl - register docker repositories
+      - name: Verify Docker from Windows
+        shell: pwsh
         run: |
-          wsl -d $env:WSL_DISTRO sudo apt-get install ca-certificates curl
-          wsl -d $env:WSL_DISTRO -- sudo install -m 0755 -d /etc/apt/keyrings
-          wsl -d $env:WSL_DISTRO -- sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-          wsl -d $env:WSL_DISTRO -- sudo chmod a+r /etc/apt/keyrings/docker.asc
-          wsl -d $env:WSL_DISTRO -- bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo ${UBUNTU_CODENAME:-$VERSION_CODENAME}) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null'
-          wsl -d $env:WSL_DISTRO sudo apt-get update
-   
-      - name: wsl - install docker
+          docker info
+
+      - name: Run hello-world container
+        shell: pwsh
         run: |
-          wsl -d $env:WSL_DISTRO sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
-
-      - name: wsl - check Docker Daemon
-        run: wsl -d $env:WSL_DISTRO docker info
-
-      - name: wsl - expose docker daemon to tcp
-        run: |
-          wsl -d $env:WSL_DISTRO bash -c "sudo sed -i 's|fd://|tcp://127.0.0.1:2375|' /usr/lib/systemd/system/docker.service"
-          wsl -d $env:WSL_DISTRO sudo systemctl daemon-reload
-          wsl -d $env:WSL_DISTRO sudo service docker restart
-
-      - name: windows - install docker client
-        run: |
-          choco install docker-cli
-
-      - name: windows - check Docker Daemon
-        run: docker info
-      
-      - name: windows - run linux hello world container
-        run: docker run hello-world:linux
+          docker run hello-world:linux
