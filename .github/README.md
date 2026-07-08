@@ -35,9 +35,28 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: BrammyS/github-action-docker-wsl2
-          lfs: true
+          lfs: false
           sparse-checkout: wsl
           path: docker-wsl
+
+      - name: Create LFS file list
+        shell: pwsh
+        working-directory: docker-wsl
+        run: git lfs ls-files -l | ForEach-Object { $_.Split(' ')[0] } | Sort-Object | Set-Content .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@v4
+        id: lfs-cache
+        with:
+          path: docker-wsl/.git/lfs
+          key: ${{ runner.os }}-lfs-${{ hashFiles('docker-wsl/.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Pull LFS files
+        shell: pwsh
+        working-directory: docker-wsl
+        run: git lfs pull
 
       - name: Import Alpine and start Docker
         shell: pwsh
