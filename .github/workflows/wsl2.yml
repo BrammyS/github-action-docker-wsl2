@@ -1,4 +1,4 @@
-name: wsl-2-action
+name: validate-wsl-2
 
 on:
   schedule:
@@ -76,4 +76,12 @@ jobs:
       - name: Run hello-world container
         shell: pwsh
         run: |
+          docker run hello-world:linux
+
+      - name: Wait 2 minutes and verify WSL + Docker still alive
+        shell: pwsh
+        run: |
+          Write-Output "Sleeping 2 minutes to test WSL persistence..."
+          Start-Sleep -Seconds 120
+          Write-Output "Verifying Docker is still responsive..."
           docker run hello-world:linux
