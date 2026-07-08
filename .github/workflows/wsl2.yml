@@ -61,7 +61,26 @@ jobs:
           # Start a keep-alive process so the WSL VM doesn't shut down between steps
           wsl -d $env:WSL_DISTRO -- sh -c 'nohup sleep infinity > /dev/null 2>&1 &'
           # Start Docker daemon
-          wsl -d $env:WSL_DISTRO -- sh -c 'nohup dockerd > /var/log/dockerd.log 2>&1 & sleep 10 && docker info'
+          wsl -d $env:WSL_DISTRO -- sh -c 'nohup dockerd > /var/log/dockerd.log 2>&1 &'
+          # Wait for Docker to become ready (up to 60 seconds)
+          $timeout = 60
+          $elapsed = 0
+          while ($elapsed -lt $timeout) {
+            $result = wsl -d $env:WSL_DISTRO -- docker info 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Output "Docker daemon is ready after ${elapsed}s"
+              Write-Output $result
+              break
+            }
+            Start-Sleep -Seconds 2
+            $elapsed += 2
+          }
+          if ($elapsed -ge $timeout) {
+            Write-Output "Docker daemon logs:"
+            wsl -d $env:WSL_DISTRO -- cat /var/log/dockerd.log
+            Write-Error "Docker daemon failed to start within ${timeout}s"
+            exit 1
+          }
 
       - name: Install Docker CLI on Windows
         shell: pwsh
