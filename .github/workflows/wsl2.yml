@@ -30,6 +30,12 @@ jobs:
           wsl --install --no-distribution
           wsl --set-default-version 2
 
+      - name: Download Alpine
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.1-x86_64.tar.gz ./alpine-minirootfs.tar.gz
+          wsl --import Alpine ./alpine-minirootfs.tar.gz
+
       - name: Install Ubuntu distro explicitly
         shell: pwsh
         run: |
