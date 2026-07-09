@@ -6,7 +6,7 @@ This project provides a pre-built Alpine WSL2 image with Docker installed, so yo
 
 ## How it works
 
-1. **Weekly build** ([`build-wsl-docker-image.yml`](./.github/workflows/build-wsl-docker-image.yml)) creates a ready-to-use Alpine WSL2 export with Docker pre-installed and uploads it as an artifact.
+1. **Alpine build** ([`build-wsl-docker-image.yml`](./workflows/build-wsl-docker-image.yml)) creates a ready-to-use Alpine WSL2 export with Docker pre-installed and uploads it as an artifact.
 2. **Your pipeline** downloads the artifact, imports it into WSL2, starts Docker, and exposes the daemon to Windows on `tcp://127.0.0.1:2375`.
 
 Windows gets full access to the Linux Docker daemon — you can use `docker build`, `docker run`, `docker compose`, etc. directly from PowerShell.
